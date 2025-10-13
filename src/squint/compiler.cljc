@@ -399,7 +399,9 @@
                                      core-alias core-package)
                              (format "import * as %s from '%s';\n"
                                      core-alias core-package)))
-             pragmas (atom {:js ""})]
+             pragmas (atom {:js ""})
+             source-maps (when-not (false? (:source-maps opts))
+                           (atom {}))]
          (binding [*imported-vars* imported-vars
                    *public-vars* public-vars
                    *aliases* aliases
@@ -413,7 +415,8 @@
                                                         :imports imports
                                                         :jsx false
                                                         :pragmas pragmas
-                                                        :need-html-import need-html-import))
+                                                        :need-html-import need-html-import
+                                                        :source-maps source-maps))
                  jsx *jsx*
                  _ (when (and jsx jsx-runtime)
                      (swap! imports str

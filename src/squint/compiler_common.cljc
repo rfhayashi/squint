@@ -108,6 +108,8 @@
 
 (defmethod emit-special 'throw [_ env [_ expr]]
   (let [smid #_:clj-kondo/ignore (gensym "sm")]
+    (when-let [source-maps (:source-maps env)]
+      (swap! source-maps assoc smid (meta expr)))
     (cond-> (str "throw " "/*" smid "*/" (emit expr (expr-env env)))
       (= :expr (:context env)) (wrap-implicit-iife env))))
 
@@ -500,6 +502,8 @@
                ?expr ?doc)
         env* (no-top-level env)
         smid #_:clj-kondo/ignore (gensym "sm")]
+    (when-let [source-maps (:source-maps env)]
+      (swap! source-maps assoc smid (assoc meta :name name)))
     (str "var "
          (if-not *repl*
            (str "/*" smid "*/")
