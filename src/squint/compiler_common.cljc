@@ -107,8 +107,9 @@
       true (yield-iife env))))
 
 (defmethod emit-special 'throw [_ env [_ expr]]
-  (cond-> (str "throw " (emit expr (expr-env env)))
-    (= :expr (:context env)) (wrap-implicit-iife env)))
+  (let [smid #_:clj-kondo/ignore (gensym "sm")]
+    (cond-> (str "throw " "/*" smid "*/" (emit expr (expr-env env)))
+      (= :expr (:context env)) (wrap-implicit-iife env))))
 
 (def statement-separator ";\n")
 
@@ -494,11 +495,16 @@
 (defn no-top-level [env]
   (dissoc env :top-level))
 
-(defn emit-var [[name ?doc ?expr :as expr] _skip-var? env]
+(defn emit-var [[name ?doc ?expr :as expr] _skip-var? env meta]
   (let [expr (if (= 3 (count expr))
                ?expr ?doc)
-        env* (no-top-level env)]
-    (str "var " (munge name) " = "
+        env* (no-top-level env)
+        smid #_:clj-kondo/ignore (gensym "sm")]
+    (str "var "
+         (if-not *repl*
+           (str "/*" smid "*/")
+           "")
+         (munge name) " = "
          (emit expr (expr-env env*)) ";\n"
          (when *repl*
            (emit-return (str "globalThis."
@@ -517,7 +523,7 @@
                              (let [current (:current state)]
                                (assoc-in state [current name] {}))))
     (let [skip-var? (:squint.compiler/skip-var (meta expr))]
-      (emit-var more skip-var? env))))
+      (emit-var more skip-var? env (meta expr)))))
 
 (defn js-await [env more]
   (emit-return
