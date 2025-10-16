@@ -24,7 +24,9 @@
    [squint.internal.fn :refer [core-defmacro core-defn core-defn- core-fn]]
    [squint.internal.loop :as loop]
    [squint.internal.macros :as macros]
-   [squint.internal.protocols :as protocols])
+   [squint.internal.protocols :as protocols]
+   #?(:cljs ["source-map" :refer [SourceMapGenerator]])
+   #?(:cljs ["path" :as path]))
   #?(:cljs (:require-macros [squint.resource :refer [edn-resource]])))
 
 
@@ -371,6 +373,13 @@
                     (rest forms)
                     (inc form-idx)))))))))
 
+#?(:cljs
+   (defn js->source-maps [source-maps javascript source-file source]
+     (let [source-file (path/basename source-file)
+           generator (SourceMapGenerator. (clj->js {}))]
+       (.setSourceContent generator source-file source)
+       [(.toString generator) javascript])))
+
 (defn compile-string*
   ([s] (compile-string* s nil))
   ([s opts] (compile-string* s opts nil))
@@ -435,16 +444,17 @@
                      (swap! imports str
                             (let [html-pkg "squint-cljs/src/squint/html.js"
                                   html-pkg (get import-maps html-pkg html-pkg)]
-                                (if cc/*repl*
-                                  (format "var squint_html = await import('%s');\n" html-pkg)
-                                  (format "import * as squint_html from '%s';\n" html-pkg)))))
+                              (if cc/*repl*
+                                (format "var squint_html = await import('%s');\n" html-pkg)
+                                (format "import * as squint_html from '%s';\n" html-pkg)))))
                  pragmas (:js @pragmas)
                  imports (when-not elide-imports @imports)
                  exports (when-not elide-exports
                            (str
                             (when-let [vars (disj @public-vars "default$")]
                               (when (seq vars)
-                                (if false #_cc/*repl*
+                                (if false
+                                  #_cc/*repl*
                                   (str/join "\n"
                                             (map (fn [var]
                                                    (str "export " var ";"))
@@ -452,13 +462,19 @@
                                   (format "\nexport { %s }\n"
                                           (str/join ", " vars)))))
                             (when (contains? @public-vars "default$")
-                              "export default default$\n")))]
+                              "export default default$\n")))
+                 javascript (str pragmas imports transpiled exports)
+                 [source-maps javascript] #?(:cljs (if source-maps
+                                                     (js->source-maps @source-maps javascript (:in-file opts) s)
+                                                     [nil javascript])
+                                             :default [nil javascript])]
              (assoc opts
                     :pragmas pragmas
                     :imports imports
                     :exports exports
                     :body transpiled
-                    :javascript (str pragmas imports transpiled exports)
+                    :javascript javascript
+                    :source-maps source-maps
                     :jsx jsx
                     :ns *cljs-ns*
                     :ns-state (:ns-state opts)))))))))
