@@ -376,7 +376,24 @@
 #?(:cljs
    (defn js->source-maps [source-maps javascript source-file source]
      (let [source-file (path/basename source-file)
-           generator (SourceMapGenerator. (clj->js {}))]
+           generator (SourceMapGenerator. (clj->js {}))
+           [javascript] (reduce (fn [[javascript line-no] line]
+                                  [(str javascript (reduce (fn [line-javascript split]
+                                                             (if-let [[_ id js-remainder] (re-matches (re-pattern "(?is)(\\d+)\\*\\/(.*)") split)]
+                                                               (let [sym (symbol (str "sm" id))
+                                                                     {:keys [line column name]} (get source-maps sym)
+                                                                     col-no (inc (count line-javascript))]
+                                                                 (.addMapping generator (clj->js (cond-> {:source source-file
+                                                                                                          :original {:line line :column column}
+                                                                                                          :generated {:line line-no :column col-no}}
+                                                                                                   name (assoc :name name))))
+                                                                 (str line-javascript js-remainder))
+                                                               (str line-javascript split)))
+                                                           ""
+                                                           (str/split line #"/\*sm")))
+                                   (inc line-no)])
+                                ["" 1]
+                                (str/split-lines javascript))]
        (.setSourceContent generator source-file source)
        [(.toString generator) javascript])))
 
