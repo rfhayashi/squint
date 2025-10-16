@@ -24,9 +24,7 @@
    [squint.internal.fn :refer [core-defmacro core-defn core-defn- core-fn]]
    [squint.internal.loop :as loop]
    [squint.internal.macros :as macros]
-   [squint.internal.protocols :as protocols]
-   #?(:cljs ["source-map" :refer [SourceMapGenerator]])
-   #?(:cljs ["path" :as path]))
+   [squint.internal.protocols :as protocols])
   #?(:cljs (:require-macros [squint.resource :refer [edn-resource]])))
 
 
@@ -374,28 +372,26 @@
                     (inc form-idx)))))))))
 
 #?(:cljs
-   (defn js->source-maps [source-maps javascript source-file source]
-     (let [source-file (path/basename source-file)
-           generator (SourceMapGenerator. (clj->js {}))
-           [javascript] (reduce (fn [[javascript line-no] line]
-                                  [(str javascript (reduce (fn [line-javascript split]
-                                                             (if-let [[_ id js-remainder] (re-matches (re-pattern "(?is)(\\d+)\\*\\/(.*)") split)]
-                                                               (let [sym (symbol (str "sm" id))
-                                                                     {:keys [line column name]} (get source-maps sym)
-                                                                     col-no (inc (count line-javascript))]
-                                                                 (.addMapping generator (clj->js (cond-> {:source source-file
-                                                                                                          :original {:line line :column column}
-                                                                                                          :generated {:line line-no :column col-no}}
-                                                                                                   name (assoc :name name))))
-                                                                 (str line-javascript js-remainder))
-                                                               (str line-javascript split)))
-                                                           ""
-                                                           (str/split line #"/\*sm")))
-                                   (inc line-no)])
-                                ["" 1]
-                                (str/split-lines javascript))]
-       (.setSourceContent generator source-file source)
-       [(.toString generator) javascript])))
+   (defn js->source-maps [source-maps javascript]
+     (let [[source-maps javascript] (reduce (fn [[sms javascript line-no] line]
+                                              (let [[line-sms line-javascript] (reduce (fn [[line-sms line-javascript] split]
+                                                                                         (if-let [[_ id js-remainder] (re-matches (re-pattern "(?is)(\\d+)\\*\\/(.*)") split)]
+                                                                                           (let [sym (symbol (str "sm" id))
+                                                                                                 {:keys [line column name]} (get source-maps sym)
+                                                                                                 col-no (inc (count line-javascript))]
+                                                                                             [(into line-sms [(cond-> {:original {:line line :column column}
+                                                                                                                       :generated {:line line-no :column col-no}}
+                                                                                                                name (assoc :name name))])
+                                                                                              (str line-javascript js-remainder)])
+                                                                                           [line-sms (str line-javascript split)]))
+                                                                                       ""
+                                                                                       (str/split line #"/\*sm"))]
+                                                [(into sms line-sms)
+                                                 (str javascript line-javascript)
+                                                 (inc line-no)]))
+                                            [[] "" 1]
+                                            (str/split-lines javascript))]
+       [source-maps javascript])))
 
 (defn compile-string*
   ([s] (compile-string* s nil))
@@ -482,7 +478,7 @@
                               "export default default$\n")))
                  javascript (str pragmas imports transpiled exports)
                  [source-maps javascript] #?(:cljs (if source-maps
-                                                     (js->source-maps @source-maps javascript (:in-file opts) s)
+                                                     (js->source-maps @source-maps javascript)
                                                      [nil javascript])
                                              :default [nil javascript])]
              (assoc opts
