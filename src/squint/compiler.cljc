@@ -387,7 +387,7 @@
                                                                                        ""
                                                                                        (str/split line #"/\*sm"))]
                                                 [(into sms line-sms)
-                                                 (str javascript line-javascript)
+                                                 (str javascript "\n" line-javascript)
                                                  (inc line-no)]))
                                             [[] "" 1]
                                             (str/split-lines javascript))]

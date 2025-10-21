@@ -2,6 +2,7 @@
   (:require
    ["fs" :as fs]
    ["path" :as path]
+   ["source-map" :refer [SourceMapGenerator]]
    #_[sci.core :as sci]
    [clojure.string :as str]
    [edamame.core :as e]
@@ -91,13 +92,21 @@
                          paths)]
     out-file))
 
+(defn- source-map [source-file source-content mappings]
+  (let [source (path/basename source-file)
+        generator (SourceMapGenerator. {})]
+    (.setSourceContent generator source source-content)
+    (doseq [mapping mappings]
+      (.addMapping generator (clj->js (assoc mapping :source source))))
+    (.toString generator)))
+
 (defn compile-file [{:keys [in-file in-str out-file extension output-dir]
                      :or {output-dir ""}
                      :as opts}]
   (let [contents (or in-str (slurp in-file))
         opts (->opts opts)]
     (-> (compile-string contents (assoc opts :ns nil))
-        (.then (fn [{:keys [javascript jsx] :as opts}]
+        (.then (fn [{:keys [javascript jsx source-maps] :as opts}]
                  (let [opts (utils/process-opts! opts)
                        paths (:paths opts ["." "src"])
                        out-file (path/resolve output-dir
@@ -108,7 +117,12 @@
                                                                  (or (when-let [ext extension]
                                                                        (str "." (str/replace ext #"^\." "")))
                                                                      ".mjs")))))
-                       out-path (path/dirname out-file)]
+                       out-path (path/dirname out-file)
+                       source-map-file (str out-file ".map")
+                       javascript (if source-maps
+                                    (str javascript "\n\n"
+                                         "//# sourceMappingURL=" (path/basename source-map-file) "\n")
+                                    javascript)]
                    (when-not (fs/existsSync out-path)
                      (fs/mkdirSync out-path #js {:recursive true}))
                    (when-not (fs/existsSync out-path)
@@ -116,6 +130,8 @@
                                        {:output-dir output-dir
                                         :out-file out-file})))
                    (spit out-file javascript)
+                   (when source-maps
+                     (spit source-map-file (source-map in-file contents source-maps)))
                    (assoc opts :out-file out-file)))))))
 
 (defn ->clj [x]
