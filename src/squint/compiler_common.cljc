@@ -503,7 +503,8 @@
         env* (no-top-level env)
         smid #_:clj-kondo/ignore (gensym "sm")]
     (when-let [source-maps (:source-maps env)]
-      (swap! source-maps assoc smid (assoc meta :name name)))
+      (when meta
+        (swap! source-maps assoc smid (assoc meta :name name))))
     (str "var "
          (if-not *repl*
            (str "/*" smid "*/")

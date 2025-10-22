@@ -371,27 +371,26 @@
                     (rest forms)
                     (inc form-idx)))))))))
 
-#?(:cljs
-   (defn js->source-maps [source-maps javascript]
-     (let [[source-maps javascript] (reduce (fn [[sms javascript line-no] line]
-                                              (let [[line-sms line-javascript] (reduce (fn [[line-sms line-javascript] split]
-                                                                                         (if-let [[_ id js-remainder] (re-matches (re-pattern "(?is)(\\d+)\\*\\/(.*)") split)]
-                                                                                           (let [sym (symbol (str "sm" id))
-                                                                                                 {:keys [line column name]} (get source-maps sym)
-                                                                                                 col-no (inc (count line-javascript))]
-                                                                                             [(into line-sms [(cond-> {:original {:line line :column column}
-                                                                                                                       :generated {:line line-no :column col-no}}
-                                                                                                                name (assoc :name name))])
-                                                                                              (str line-javascript js-remainder)])
-                                                                                           [line-sms (str line-javascript split)]))
-                                                                                       ""
-                                                                                       (str/split line #"/\*sm"))]
-                                                [(into sms line-sms)
-                                                 (str javascript "\n" line-javascript)
-                                                 (inc line-no)]))
-                                            [[] "" 1]
-                                            (str/split-lines javascript))]
-       [source-maps javascript])))
+(defn js->source-maps [source-maps javascript]
+   (let [[source-maps javascript] (reduce (fn [[sms javascript line-no] line]
+                                            (let [[line-sms line-javascript] (reduce (fn [[line-sms line-javascript] split]
+                                                                                       (if-let [[_ id js-remainder] (re-matches (re-pattern "(?is)(\\d+)\\*\\/(.*)") split)]
+                                                                                         (let [sym (symbol (str "sm" id))
+                                                                                               {:keys [line column name]} (get source-maps sym)
+                                                                                               col-no (inc (count line-javascript))]
+                                                                                           [(into line-sms (if line[(cond-> {:original {:line line :column column}
+                                                                                                                             :generated {:line line-no :column col-no}}
+                                                                                                                      name (assoc :name name))] []))
+                                                                                            (str line-javascript js-remainder)])
+                                                                                         [line-sms (str line-javascript split)]))
+                                                                                     ""
+                                                                                     (str/split line #"/\*sm"))]
+                                              [(into sms line-sms)
+                                               (str javascript "\n" line-javascript)
+                                               (inc line-no)]))
+                                          [[] "" 1]
+                                          (str/split-lines javascript))]
+     [source-maps javascript]))
 
 (defn compile-string*
   ([s] (compile-string* s nil))
